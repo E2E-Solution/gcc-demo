@@ -1392,27 +1392,46 @@ async function loadEolForCard(item) {
     const key    = machineKey(name, item.vm_type);
     const id     = cardId(key);
     const badge  = document.getElementById(`${id}-eol-badge`);
-    if (!badge) return;
+    if (!badge) {
+        console.warn(`EOL badge element not found for ${name}`, id);
+        return;
+    }
 
     // Build lookup string: "Windows Server 2016", "Ubuntu 20.04", etc.
     const osName    = item.normalized_os_name || item.os_name || '';
     const osVersion = item.normalized_os_version || item.os_version || '';
-    if (!osName) return;
+    if (!osName) {
+        console.debug(`No OS name for ${name}, skipping EOL lookup`);
+        return;
+    }
 
     const query = osVersion ? `${osName} ${osVersion}` : osName;
+    console.debug(`Fetching EOL for ${name}: ${query}`);
 
     try {
         const resp = await fetch(`/api/eol?name=${encodeURIComponent(query)}`);
-        if (!resp.ok) return;
+        if (!resp.ok) {
+            console.warn(`EOL API error for ${name}: HTTP ${resp.status}`);
+            return;
+        }
         const json = await resp.json();
-        if (!json.success) return;
+        if (!json.success) {
+            console.warn(`EOL API returned success=false for ${name}:`, json);
+            return;
+        }
 
-        const items = Array.isArray(json.data) ? json.data : [];
-        if (items.length === 0) return;
+        // Response structure: { success: true, data: { eol_data: {...}, software_name, ... } }
+        const result = json.data;
+        if (!result || !result.eol_data) {
+            console.debug(`No EOL data found for ${name} (${query})`);
+            return;
+        }
 
-        const eol = items[0].eol_data || {};
+        const eol = result.eol_data;
         const eolDate   = eol.eol_date || eol.eol;
         const eolStatus = (eol.status || '').toLowerCase();
+
+        console.debug(`EOL data for ${name}:`, { eolDate, eolStatus, source: result.primary_source });
 
         if (eolStatus.includes('expired') || eolStatus.includes('end-of-life')) {
             badge.innerHTML = '<span class="badge bg-danger">EOL</span>';
@@ -1420,7 +1439,7 @@ async function loadEolForCard(item) {
             badge.innerHTML = `<span class="badge bg-warning text-dark">EOL ${fmtDate(eolDate)}</span>`;
         }
     } catch (e) {
-        // Non-critical — EOL badge is best-effort
+        console.error(`EOL fetch error for ${name}:`, e);
     }
 }
 
