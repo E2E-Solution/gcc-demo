@@ -1693,10 +1693,28 @@
         const infoDays = convertTodays(alertConfig.info.period, alertConfig.info.unit);
 
         osInventoryData.forEach(osItem => {
-            const normalizedName = String(osItem.os_name || osItem.name || 'Unknown OS').trim() || 'Unknown OS';
-            const normalizedVersion = osItem.os_version || osItem.version || osItem.normalized_os_version || 'Unknown';
-            // Mock EOL dates - in real implementation, this would come from EOL database
-            const eolDate = getMockEOLDate(normalizedName, normalizedVersion);
+            const normalizedName = String(osItem.os_name || 'Unknown OS').trim() || 'Unknown OS';
+            const normalizedVersion = osItem.os_version || 'Unknown';
+
+            // Detect VM type from resource_id if vm_type is not set
+            let vmType = osItem.vm_type;
+            if (!vmType && osItem.resource_id) {
+                const resourceId = String(osItem.resource_id).toLowerCase();
+                if (resourceId.includes('/microsoft.compute/virtualmachines/')) {
+                    vmType = 'azure';
+                } else if (resourceId.includes('/microsoft.hybridcompute/machines/')) {
+                    vmType = 'arc';
+                }
+            }
+
+            // Use eol_date from API if available, otherwise use mock data
+            let eolDate = null;
+            if (osItem.eol_date) {
+                eolDate = new Date(osItem.eol_date);
+            } else {
+                // Mock EOL dates - in real implementation, this would come from EOL database
+                eolDate = getMockEOLDate(normalizedName, normalizedVersion);
+            }
 
             if (eolDate) {
                 const daysUntilEOL = Math.ceil((eolDate - now) / (1000 * 60 * 60 * 24));
@@ -1712,11 +1730,11 @@
 
                 if (alertLevel) {
                     alertItems.push({
-                        computer: osItem.computer_name || osItem.computer || 'Unknown',
+                        computer: osItem.vm_name || 'Unknown',
                         osName: normalizedName || 'Unknown OS',
                         version: normalizedVersion,
-                        environment: normalizeEnvironment(osItem.computer_environment || osItem.environment || 'Unknown'),
-                        vmType: detectVmType(osItem),
+                        environment: osItem.location || 'Unknown',
+                        vmType: vmType || 'other',
                         eolDate: eolDate,
                         daysUntilEOL: daysUntilEOL,
                         alertLevel: alertLevel
@@ -1842,9 +1860,9 @@
     }
 
     function formatVmTypeBadge(vmType) {
-        const type = vmType || 'other';
-        if (type === 'azure-vm') return '<span class="vm-type-badge azure">Azure VM</span>';
-        if (type === 'arc') return '<span class="vm-type-badge arc">Arc VM</span>';
+        const type = (vmType || 'other').toLowerCase();
+        if (type === 'azure-vm' || type === 'azure' || type === 'azure vm') return '<span class="vm-type-badge azure">Azure VM</span>';
+        if (type === 'arc' || type === 'arc vm' || type === 'arc server' || type === 'arc-enabled server') return '<span class="vm-type-badge arc">Arc VM</span>';
         return '<span class="vm-type-badge other">Other</span>';
     }
 
