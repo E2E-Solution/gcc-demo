@@ -1267,11 +1267,11 @@
 
     async function loadOSInventory() {
         try {
-            const response = await fetch('/api/os?days=90');
+            const response = await fetch('/api/os?limit=1000');
             const data = await response.json();
 
             if (response.ok && data.success) {
-                osInventoryData = data.data || [];
+                osInventoryData = data.data?.items || [];
                 // Loaded OS inventory items
                 updatePreview();
             } else {
