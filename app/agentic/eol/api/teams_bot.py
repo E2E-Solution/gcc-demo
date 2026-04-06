@@ -927,8 +927,16 @@ async def handle_teams_bot_message(
                         logger.error("Missing required activity fields for response")
                         return {"status": "error", "message": "Missing activity fields"}
                 else:
-                    error_msg = result.get("error", "Unknown error occurred")
+                    # Check both top-level error and metadata.error for comprehensive error reporting
+                    metadata = result.get("metadata", {})
+                    error_msg = (
+                        result.get("error") or
+                        metadata.get("error") or
+                        result.get("response") or
+                        "Unknown error occurred"
+                    )
                     logger.error(f"MCP orchestrator error: {error_msg}")
+                    logger.error(f"Full result metadata: {metadata}")
                     error_response_text = f"❌ Error: {error_msg}"
 
                     if conversation_id:
